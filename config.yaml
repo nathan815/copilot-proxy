@@ -1,0 +1,38 @@
+# Copilot API Proxy Configuration
+# See copilot-api-js/config.example.yaml for all options.
+
+model_overrides:
+  opus: claude-opus-4.6-1m
+  haiku: claude-sonnet-4.6
+  claude-opus-4.5: claude-opus-4.6-1m
+  claude-opus-4.6: claude-opus-4.6-1m
+  claude-sonnet-4.5: claude-sonnet-4.6
+  claude-haiku-4.5: claude-sonnet-4.6
+
+stream_idle_timeout: 300
+fetch_timeout: 600
+stale_request_max_age: 600
+model_refresh_interval: 600
+
+shutdown:
+  graceful_wait: 300
+  abort_wait: 600
+
+history:
+  limit: 200
+  min_entries: 50
+
+anthropic:
+  strip_server_tools: false
+  dedup_tool_calls: false
+  immutable_thinking_messages: false
+  strip_read_tool_result_tags: false
+  context_editing: off
+  tool_search: true
+  cache_control: proxied
+
+rate_limiter:
+  retry_interval: 10
+  request_interval: 10
+  recovery_timeout: 10
+  consecutive_successes: 5

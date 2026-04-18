@@ -1,0 +1,25 @@
+services:
+  copilot-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: copilot-proxy
+    restart: unless-stopped
+    ports:
+      - "4141:4141"
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_HOSTNAME=${TS_HOSTNAME:-copilot-proxy}
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - copilot-data:/root/.local/share/copilot-api
+      - ./config.yaml:/app/config.yaml:ro
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+volumes:
+  tailscale-state:
+  copilot-data:
