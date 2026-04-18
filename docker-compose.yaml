@@ -7,10 +7,10 @@ services:
     container_name: copilot-proxy
     restart: unless-stopped
     ports:
-      - "4141:4141"
+      - "127.0.0.1:4141:4141"
     volumes:
       - copilot-data:/root/.local/share/copilot-api
-      - ./config.yaml:/app/config.yaml:ro
+      - ./config.yaml:/root/.local/share/copilot-api/config.yaml:ro
 
 volumes:
   copilot-data:

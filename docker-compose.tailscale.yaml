@@ -12,10 +12,9 @@ services:
     volumes:
       - tailscale-state:/var/lib/tailscale
     ports:
-      - "4141:4141"
+      - "127.0.0.1:4141:4141"
     cap_add:
       - NET_ADMIN
-      - SYS_MODULE
     devices:
       - /dev/net/tun:/dev/net/tun
 
