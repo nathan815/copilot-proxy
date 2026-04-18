@@ -8,18 +8,10 @@ RUN git clone --depth 1 https://github.com/puxu-msft/copilot-api-js.git .
 RUN bun install --frozen-lockfile
 RUN bun run build
 
-# Stage 2: Runtime with Tailscale
+# Stage 2: Runtime (no Tailscale — use sidecar for that)
 FROM oven/bun:1-debian
 
-# Install Tailscale
-RUN apt-get update && \
-    apt-get install -y curl gnupg iptables iproute2 ca-certificates && \
-    curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg | \
-      gpg --dearmor -o /usr/share/keyrings/tailscale-archive-keyring.gpg && \
-    curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list | \
-      tee /etc/apt/sources.list.d/tailscale.list && \
-    apt-get update && \
-    apt-get install -y tailscale && \
+RUN apt-get update && apt-get install -y curl ca-certificates && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

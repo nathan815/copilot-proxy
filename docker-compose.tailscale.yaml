@@ -1,0 +1,27 @@
+services:
+  tailscale:
+    image: ghcr.io/nathan815/copilot-proxy-tailscale:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.tailscale
+    container_name: copilot-proxy-tailscale
+    restart: unless-stopped
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY:-}
+      - TS_HOSTNAME=${TS_HOSTNAME:-copilot-proxy}
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+  copilot-proxy:
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    ports: !reset []
+
+volumes:
+  tailscale-state:

@@ -9,6 +9,8 @@ param(
 $ErrorActionPreference = "Stop"
 Push-Location $PSScriptRoot
 
+$tsCompose = @("-f", "docker-compose.yaml", "-f", "docker-compose.tailscale.yaml")
+
 try {
     switch ($Command) {
         "auth" {
@@ -26,20 +28,6 @@ try {
                 -v "${claudeJson}:/root/.claude.json" `
                 copilot-proxy setup-claude-code @ExtraArgs
         }
-        "tailscale-auth" {
-            Write-Host "Starting Tailscale interactive login..."
-            docker compose run --rm -it copilot-proxy tailscale-auth
-        }
-        "tailscale-start" {
-            Write-Host "Starting proxy with Tailscale..."
-            docker compose run -d --rm --service-ports copilot-proxy tailscale-start @ExtraArgs
-            Write-Host "Copilot proxy running at http://localhost:4141"
-            $hostname = if ($env:TS_HOSTNAME) { $env:TS_HOSTNAME } else { "copilot-proxy" }
-            Write-Host "Tailscale hostname: http://${hostname}:4141"
-        }
-        "tailscale-stop" {
-            docker compose down
-        }
         "start" {
             docker compose up -d @ExtraArgs
             Write-Host "Copilot proxy running at http://localhost:4141"
@@ -56,6 +44,22 @@ try {
         "build" {
             docker compose build
         }
+        "tailscale-auth" {
+            Write-Host "Starting Tailscale interactive login..."
+            docker compose @tsCompose run --rm -it tailscale auth
+        }
+        "tailscale-start" {
+            docker compose @tsCompose up -d @ExtraArgs
+            Write-Host "Copilot proxy running at http://localhost:4141"
+            $hostname = if ($env:TS_HOSTNAME) { $env:TS_HOSTNAME } else { "copilot-proxy" }
+            Write-Host "Tailscale hostname: http://${hostname}:4141"
+        }
+        "tailscale-stop" {
+            docker compose @tsCompose down
+        }
+        "tailscale-build" {
+            docker compose @tsCompose build
+        }
         default {
             Write-Host "copilotproxy - GitHub Copilot API proxy"
             Write-Host ""
@@ -70,10 +74,11 @@ try {
             Write-Host "  logs              Tail container logs"
             Write-Host "  build             Rebuild the container"
             Write-Host ""
-            Write-Host "Tailscale (optional):"
+            Write-Host "Tailscale (optional - runs as sidecar container):"
             Write-Host "  tailscale-auth    Interactive Tailscale login"
-            Write-Host "  tailscale-start   Start proxy with Tailscale networking"
-            Write-Host "  tailscale-stop    Stop Tailscale-enabled proxy"
+            Write-Host "  tailscale-start   Start proxy + Tailscale sidecar"
+            Write-Host "  tailscale-stop    Stop proxy + Tailscale sidecar"
+            Write-Host "  tailscale-build   Rebuild both containers"
             Write-Host ""
             Write-Host "First-time setup:"
             Write-Host "  1. .\copilotproxy.ps1 auth"
