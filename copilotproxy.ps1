@@ -37,6 +37,9 @@ try {
             $hostname = if ($env:TS_HOSTNAME) { $env:TS_HOSTNAME } else { "copilot-proxy" }
             Write-Host "Tailscale hostname: http://${hostname}:4141"
         }
+        "tailscale-stop" {
+            docker compose down
+        }
         "start" {
             docker compose up -d @ExtraArgs
             Write-Host "Copilot proxy running at http://localhost:4141"
@@ -70,6 +73,7 @@ try {
             Write-Host "Tailscale (optional):"
             Write-Host "  tailscale-auth    Interactive Tailscale login"
             Write-Host "  tailscale-start   Start proxy with Tailscale networking"
+            Write-Host "  tailscale-stop    Stop Tailscale-enabled proxy"
             Write-Host ""
             Write-Host "First-time setup:"
             Write-Host "  1. .\copilotproxy.ps1 auth"
