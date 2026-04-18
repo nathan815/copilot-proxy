@@ -14,6 +14,7 @@ case "$1" in
     exec bun run dist/main.mjs start "$@"
     ;;
   *)
-    exec "$@"
+    # Default to start if no recognized command
+    exec bun run dist/main.mjs start "$@"
     ;;
 esac
