@@ -17,9 +17,18 @@
 	@preflight method OPTIONS
 	respond @preflight 204
 
-	# No auth: health check, UI dashboard, history
-	@noauth path /health /ui /ui/* /history /history/* /api/* /models /ws /favicon.ico
+	# No auth: health check only
+	@noauth path /health
 	handle @noauth {
+		reverse_proxy {$PROXY_UPSTREAM:copilot-proxy:4141}
+	}
+
+	# Basic auth: UI, models, history, websocket, API status
+	@uiroutes path /ui /ui/* /history /history/* /api/* /models /ws /favicon.ico
+	handle @uiroutes {
+		basic_auth {
+			admin {$UI_PASSWORD_HASH}
+		}
 		reverse_proxy {$PROXY_UPSTREAM:copilot-proxy:4141}
 	}
 

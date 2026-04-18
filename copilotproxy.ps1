@@ -51,20 +51,48 @@ try {
             Write-Host "Generated proxy auth token: $token"
             Write-Host "Saved to .env"
         }
-        "auth" {
+        "ui-password" {
+            Ensure-EnvFile
+            $newPass = Read-Host "Enter new UI password (leave blank to generate)"
+            if (-not $newPass) {
+                $newPass = -join ((1..16) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+            }
+            $envContent = Get-Content $envFile -Raw
+            if ($envContent -match 'UI_PASSWORD=') {
+                $envContent = $envContent -replace 'UI_PASSWORD=.*', "UI_PASSWORD=$newPass"
+            } else {
+                $envContent = $envContent.TrimEnd() + "`nUI_PASSWORD=$newPass"
+            }
+            Set-Content -Path $envFile -Value $envContent.TrimEnd() -NoNewline
+            Write-Host "UI password updated. Login: admin / $newPass"
+            $restart = Read-Host "Restart Caddy now to apply? (Y/n)"
+            if ($restart -ne 'n') {
+                $tsContainer = docker ps --quiet --filter "name=copilot-proxy-tailscale" 2>$null
+                if ($tsContainer) {
+                    docker compose @tsCompose restart caddy
+                } else {
+                    docker compose restart caddy
+                }
+            }
+        }
+        "login" {
             Write-Host "Starting GitHub OAuth device flow..."
             docker compose run --rm -it copilot-proxy auth
         }
         "init" {
-            Write-Host "=== Step 1/3: Generating proxy auth token ===" -ForegroundColor Cyan
+            Write-Host "=== Step 1/4: Generating proxy auth token ===" -ForegroundColor Cyan
             & $PSCommandPath token
 
             Write-Host ""
-            Write-Host "=== Step 2/3: GitHub OAuth login ===" -ForegroundColor Cyan
-            & $PSCommandPath auth
+            Write-Host "=== Step 2/4: Setting UI password ===" -ForegroundColor Cyan
+            & $PSCommandPath ui-password
 
             Write-Host ""
-            Write-Host "=== Step 3/3: Configuring Claude Code ===" -ForegroundColor Cyan
+            Write-Host "=== Step 3/4: GitHub OAuth login ===" -ForegroundColor Cyan
+            & $PSCommandPath login
+
+            Write-Host ""
+            Write-Host "=== Step 4/4: Configuring Claude Code ===" -ForegroundColor Cyan
             & $PSCommandPath setup-claude
         }
         "setup-claude" {
@@ -167,10 +195,11 @@ try {
             Write-Host "Usage: .\copilotproxy.ps1 <command>"
             Write-Host ""
             Write-Host "Setup:"
-            Write-Host "  init              Full setup: token + auth + setup-claude"
-            Write-Host "  token             Generate proxy auth token (saved to .env)"
-            Write-Host "  auth              GitHub OAuth login (first-time setup)"
-            Write-Host "  setup-claude      Configure Claude Code to use this proxy"
+            Write-Host "  init                 Full setup: token + ui-password + login + setup-claude"
+            Write-Host "  login                GitHub OAuth login"
+            Write-Host "  token                Generate proxy auth token (saved to .env)"
+            Write-Host "  ui-password          Set or change the UI basic auth password"
+            Write-Host "  setup-claude         Configure Claude Code to use this proxy"
             Write-Host "  setup-claude-remote  Start approval server for remote device setup"
             Write-Host ""
             Write-Host "Commands:"
@@ -187,7 +216,7 @@ try {
             Write-Host "  tailscale-build          Rebuild both containers"
             Write-Host ""
             Write-Host "First-time setup:"
-            Write-Host "  1. .\copilotproxy.ps1 init    (or run token, auth, setup-claude separately)"
+            Write-Host "  1. .\copilotproxy.ps1 init    (or run token, login, setup-claude separately)"
             Write-Host "  2. .\copilotproxy.ps1 start"
             Write-Host ""
             Write-Host "Proxy will be available at http://localhost:4141"

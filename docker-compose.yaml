@@ -7,6 +7,11 @@ services:
       - "127.0.0.1:4141:4141"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: /bin/sh
+    command: ["/entrypoint.sh"]
+    env_file:
+      - .env
     environment:
       - PROXY_AUTH_TOKEN=${PROXY_AUTH_TOKEN:?Run .\copilotproxy.ps1 token first}
     depends_on:
