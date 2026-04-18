@@ -1,4 +1,4 @@
-FROM tailscale/tailscale:latest
+FROM tailscale/tailscale:v1.96.5
 
 COPY tailscale-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

@@ -11,6 +11,7 @@ Flow:
 
 import http.server
 import os
+import socket
 import sys
 import textwrap
 import threading
@@ -24,9 +25,18 @@ SETUP_SCRIPT_PATH = "/etc/caddy/remote-setup.sh"
 class SetupHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         remote_ip = self.headers.get("X-Forwarded-For", self.client_address[0])
+        user_agent = self.headers.get("User-Agent", "unknown")
+        try:
+            remote_hostname = socket.gethostbyaddr(remote_ip)[0]
+        except (socket.herror, socket.gaierror):
+            remote_hostname = None
 
         print(f"\n{'='*50}")
-        print(f"  Setup request from: {remote_ip}")
+        if remote_hostname:
+            print(f"  Setup request from: {remote_hostname} ({remote_ip})")
+        else:
+            print(f"  Setup request from: {remote_ip}")
+        print(f"  User-Agent: {user_agent}")
         print(f"{'='*50}")
 
         try:
@@ -78,9 +88,9 @@ def main():
 
     server = http.server.HTTPServer(("0.0.0.0", PORT), SetupHandler)
     print(f"Remote setup server running on port {PORT}")
-    print(f"Tell your other device to run:")
+    print(f"Run this on your other device:")
     print(f"")
-    print(f"  curl -s http://{PROXY_HOST.split(':')[0]}:{PORT}/ | sh")
+    print(f"  curl -s {PROXY_HOST.split(':')[0]}:{PORT} | sh")
     print(f"")
     print(f"Waiting for request... (Ctrl+C to cancel)")
 

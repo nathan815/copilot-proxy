@@ -18,7 +18,7 @@
 	respond @preflight 204
 
 	# No auth: health check, UI dashboard, history
-	@noauth path /health /ui /ui/* /history /history/* /api/* /ws /favicon.ico
+	@noauth path /health /ui /ui/* /history /history/* /api/* /models /ws /favicon.ico
 	handle @noauth {
 		reverse_proxy {$PROXY_UPSTREAM:copilot-proxy:4141}
 	}

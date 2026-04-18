@@ -107,9 +107,9 @@ try {
         }
         "setup-claude-remote" {
             Assert-TokenExists
-            # Detect if tailscale stack is running
-            $tsRunning = docker compose @tsCompose ps --quiet 2>$null
-            if ($tsRunning) {
+            # Detect if tailscale container is running
+            $tsContainer = docker ps --quiet --filter "name=copilot-proxy-tailscale" 2>$null
+            if ($tsContainer) {
                 Write-Host "Starting remote setup server (via Tailscale)..." -ForegroundColor Cyan
                 Write-Host ""
                 docker compose @tsCompose --profile setup run --rm -it setup-server
