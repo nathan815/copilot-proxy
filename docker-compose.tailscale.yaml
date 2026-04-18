@@ -13,6 +13,7 @@ services:
       - tailscale-state:/var/lib/tailscale
     ports:
       - "4141:4141"
+      - "4142:4142"
     cap_add:
       - NET_ADMIN
     devices:
@@ -30,7 +31,13 @@ services:
     network_mode: service:tailscale
     depends_on:
       - tailscale
+    expose: !reset []
     command: ["start", "--port", "4142"]
+
+  setup-server:
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
 
 volumes:
   tailscale-state:

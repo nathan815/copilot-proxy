@@ -7,7 +7,6 @@ services:
       - "127.0.0.1:4141:4141"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./remote-setup.sh:/etc/caddy/remote-setup.sh:ro
     environment:
       - PROXY_AUTH_TOKEN=${PROXY_AUTH_TOKEN:?Run .\copilotproxy.ps1 token first}
     depends_on:
@@ -25,6 +24,18 @@ services:
     volumes:
       - copilot-data:/root/.local/share/copilot-api
       - ./config.yaml:/root/.local/share/copilot-api/config.yaml:ro
+
+  setup-server:
+    image: python:3-alpine
+    container_name: copilot-setup-server
+    volumes:
+      - ./remote-setup-server.py:/app/remote-setup-server.py:ro
+      - ./remote-setup.sh:/etc/caddy/remote-setup.sh:ro
+    environment:
+      - PROXY_AUTH_TOKEN=${PROXY_AUTH_TOKEN}
+    command: python3 /app/remote-setup-server.py
+    profiles:
+      - setup
 
 volumes:
   copilot-data:

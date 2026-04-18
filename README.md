@@ -12,7 +12,7 @@ Dockerized [copilot-api-js](https://github.com/puxu-msft/copilot-api-js) reverse
 .\copilotproxy.ps1 start
 
 # 3. Configure Claude Code to use the proxy
-.\copilotproxy.ps1 setup-claude-code
+.\copilotproxy.ps1 setup-claude
 ```
 
 The proxy will be available at **http://localhost:4141**.
@@ -22,7 +22,7 @@ The proxy will be available at **http://localhost:4141**.
 | Command | Description |
 |---------|-------------|
 | `auth` | GitHub OAuth login (interactive device flow) |
-| `setup-claude-code` | Configure Claude Code to use this proxy |
+| `setup-claude` | Configure Claude Code to use this proxy |
 | `start` | Start the proxy locally (detached) |
 | `stop` | Stop the proxy |
 | `restart` | Restart the proxy |

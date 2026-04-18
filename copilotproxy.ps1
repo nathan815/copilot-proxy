@@ -65,9 +65,9 @@ try {
 
             Write-Host ""
             Write-Host "=== Step 3/3: Configuring Claude Code ===" -ForegroundColor Cyan
-            & $PSCommandPath setup-claude-code
+            & $PSCommandPath setup-claude
         }
-        "setup-claude-code" {
+        "setup-claude" {
             Write-Host "Configuring Claude Code to use copilot-proxy..."
             Assert-TokenExists
             $token = Get-ProxyToken
@@ -99,14 +99,17 @@ try {
             docker compose up -d @ExtraArgs
             Write-Host "Copilot proxy running at http://localhost:4141"
         }
-        "setup-url" {
+        "setup-claude-remote" {
             Assert-TokenExists
-            $token = Get-ProxyToken
-            Write-Host "Run this on your other devices to configure Claude Code:"
+            Write-Host "Starting remote setup server..." -ForegroundColor Cyan
             Write-Host ""
-            Write-Host "  curl -s 'http://copilot-proxy:4141/setup?token=$token' | sh" -ForegroundColor Cyan
+            docker compose --profile setup run --rm -it -p 4142:4142 setup-server
+        }
+        "tailscale-setup-remote" {
+            Assert-TokenExists
+            Write-Host "Starting remote setup server (via Tailscale)..." -ForegroundColor Cyan
             Write-Host ""
-            Write-Host "Replace 'copilot-proxy' with your Tailscale hostname if different."
+            docker compose @tsCompose --profile setup run --rm -it setup-server
         }
         "stop" {
             docker compose down
@@ -149,11 +152,11 @@ try {
             Write-Host "Usage: .\copilotproxy.ps1 <command>"
             Write-Host ""
             Write-Host "Setup:"
-            Write-Host "  init              Full setup: token + auth + setup-claude-code"
+            Write-Host "  init              Full setup: token + auth + setup-claude"
             Write-Host "  token             Generate proxy auth token (saved to .env)"
             Write-Host "  auth              GitHub OAuth login (first-time setup)"
-            Write-Host "  setup-claude-code Configure Claude Code to use this proxy"
-            Write-Host "  setup-url         Print remote setup command for your other devices"
+            Write-Host "  setup-claude      Configure Claude Code to use this proxy"
+            Write-Host "  setup-claude-remote  Start approval server for remote device setup"
             Write-Host ""
             Write-Host "Commands:"
             Write-Host "  start             Start the proxy locally (detached)"
@@ -163,13 +166,14 @@ try {
             Write-Host "  build             Rebuild the container"
             Write-Host ""
             Write-Host "Tailscale (optional - runs as sidecar container):"
-            Write-Host "  tailscale-auth    Interactive Tailscale login"
-            Write-Host "  tailscale-start   Start proxy + Tailscale sidecar"
-            Write-Host "  tailscale-stop    Stop proxy + Tailscale sidecar"
-            Write-Host "  tailscale-build   Rebuild both containers"
+            Write-Host "  tailscale-auth           Interactive Tailscale login"
+            Write-Host "  tailscale-start          Start proxy + Tailscale sidecar"
+            Write-Host "  tailscale-stop           Stop proxy + Tailscale sidecar"
+            Write-Host "  tailscale-build          Rebuild both containers"
+            Write-Host "  tailscale-setup-remote   Approve remote device setup (via Tailscale)"
             Write-Host ""
             Write-Host "First-time setup:"
-            Write-Host "  1. .\copilotproxy.ps1 init    (or run token, auth, setup-claude-code separately)"
+            Write-Host "  1. .\copilotproxy.ps1 init    (or run token, auth, setup-claude separately)"
             Write-Host "  2. .\copilotproxy.ps1 start"
             Write-Host ""
             Write-Host "Proxy will be available at http://localhost:4141"

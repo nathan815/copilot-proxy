@@ -2,7 +2,7 @@
 # Copilot Proxy Remote Setup
 # Configures Claude Code on this device to use your proxy.
 #
-# Usage: curl -s "http://copilot-proxy:4141/setup?token=YOUR_TOKEN" | sh
+# Usage: curl -s http://copilot-proxy:4142/ | sh
 
 set -e
 
