@@ -1,5 +1,6 @@
 services:
   copilot-proxy:
+    image: ghcr.io/nathan815/copilot-proxy:latest
     build:
       context: .
       dockerfile: Dockerfile

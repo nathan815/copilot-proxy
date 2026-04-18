@@ -30,6 +30,10 @@ case "$1" in
     connect_tailscale
     echo "Tailscale connected as $TS_HOSTNAME"
     ;;
+  setup-claude-code)
+    shift
+    bun run dist/main.mjs setup-claude-code "$@"
+    ;;
   start)
     shift
     start_tailscaled
