@@ -18,26 +18,35 @@ services:
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--timeout=2", "https://api.github.com/zen"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   caddy:
     network_mode: service:tailscale
     depends_on:
-      - tailscale
+      tailscale:
+        condition: service_healthy
     ports: !reset []
     environment:
-      - PROXY_UPSTREAM=localhost:4142
+      - PROXY_UPSTREAM=127.0.0.1:4142
 
   copilot-proxy:
     network_mode: service:tailscale
     depends_on:
-      - tailscale
+      tailscale:
+        condition: service_healthy
     expose: !reset []
-    command: ["start", "--port", "4142"]
+    command: ["start", "--port", "4142", "--host", "127.0.0.1"]
 
   setup-server:
     network_mode: service:tailscale
     depends_on:
-      - tailscale
+      tailscale:
+        condition: service_healthy
 
 volumes:
   tailscale-state:
