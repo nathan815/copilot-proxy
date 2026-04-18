@@ -3,7 +3,7 @@
 
 Flow:
 1. Operator runs `setup-claude-remote` (interactive terminal)
-2. Remote device curls http://copilot-proxy:4142/ directly
+2. Remote device curls http://copilot-proxy:4143/ directly
 3. Operator sees the remote IP and approves/denies via y/N prompt
 4. Remote device receives the setup script or denial
 5. Server exits after one request
@@ -15,7 +15,7 @@ import sys
 import textwrap
 import threading
 
-PORT = int(os.environ.get("SETUP_PORT", "4142"))
+PORT = int(os.environ.get("SETUP_PORT", "4143"))
 PROXY_AUTH_TOKEN = os.environ.get("PROXY_AUTH_TOKEN", "")
 PROXY_HOST = os.environ.get("PROXY_HOST", "copilot-proxy:4141")
 SETUP_SCRIPT_PATH = "/etc/caddy/remote-setup.sh"

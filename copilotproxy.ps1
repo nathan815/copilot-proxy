@@ -96,20 +96,28 @@ try {
         }
         "start" {
             Assert-TokenExists
+            $tsContainer = docker ps --quiet --filter "name=copilot-proxy-tailscale" 2>$null
+            if ($tsContainer) {
+                $answer = Read-Host "Tailscale mode is running. Stop and switch to local? (y/N)"
+                if ($answer -ne 'y') { return }
+                docker compose @tsCompose down
+            }
             docker compose up -d @ExtraArgs
             Write-Host "Copilot proxy running at http://localhost:4141"
         }
         "setup-claude-remote" {
             Assert-TokenExists
-            Write-Host "Starting remote setup server..." -ForegroundColor Cyan
-            Write-Host ""
-            docker compose --profile setup run --rm -it -p 4142:4142 setup-server
-        }
-        "tailscale-setup-remote" {
-            Assert-TokenExists
-            Write-Host "Starting remote setup server (via Tailscale)..." -ForegroundColor Cyan
-            Write-Host ""
-            docker compose @tsCompose --profile setup run --rm -it setup-server
+            # Detect if tailscale stack is running
+            $tsRunning = docker compose @tsCompose ps --quiet 2>$null
+            if ($tsRunning) {
+                Write-Host "Starting remote setup server (via Tailscale)..." -ForegroundColor Cyan
+                Write-Host ""
+                docker compose @tsCompose --profile setup run --rm -it setup-server
+            } else {
+                Write-Host "Starting remote setup server..." -ForegroundColor Cyan
+                Write-Host ""
+                docker compose --profile setup run --rm -it -p 4143:4143 setup-server
+            }
         }
         "stop" {
             docker compose down
@@ -135,6 +143,13 @@ try {
         }
         "tailscale-start" {
             Assert-TokenExists
+            $localCaddy = docker ps --quiet --filter "name=copilot-caddy" 2>$null
+            $tsContainer = docker ps --quiet --filter "name=copilot-proxy-tailscale" 2>$null
+            if ($localCaddy -and -not $tsContainer) {
+                $answer = Read-Host "Local mode is running. Stop and switch to Tailscale? (y/N)"
+                if ($answer -ne 'y') { return }
+                docker compose down
+            }
             docker compose @tsCompose up -d @ExtraArgs
             Write-Host "Copilot proxy running at http://localhost:4141"
             $hostname = if ($env:TS_HOSTNAME) { $env:TS_HOSTNAME } else { "copilot-proxy" }
@@ -170,7 +185,6 @@ try {
             Write-Host "  tailscale-start          Start proxy + Tailscale sidecar"
             Write-Host "  tailscale-stop           Stop proxy + Tailscale sidecar"
             Write-Host "  tailscale-build          Rebuild both containers"
-            Write-Host "  tailscale-setup-remote   Approve remote device setup (via Tailscale)"
             Write-Host ""
             Write-Host "First-time setup:"
             Write-Host "  1. .\copilotproxy.ps1 init    (or run token, auth, setup-claude separately)"

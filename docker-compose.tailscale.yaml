@@ -13,7 +13,7 @@ services:
       - tailscale-state:/var/lib/tailscale
     ports:
       - "4141:4141"
-      - "4142:4142"
+      - "4143:4143"
     cap_add:
       - NET_ADMIN
     devices:
