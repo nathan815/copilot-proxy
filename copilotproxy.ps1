@@ -10,15 +10,67 @@ $ErrorActionPreference = "Stop"
 Push-Location $PSScriptRoot
 
 $tsCompose = @("-f", "docker-compose.yaml", "-f", "docker-compose.tailscale.yaml")
+$envFile = Join-Path $PSScriptRoot ".env"
+
+function Ensure-EnvFile {
+    if (-not (Test-Path $envFile)) {
+        Copy-Item (Join-Path $PSScriptRoot ".env.example") $envFile
+    }
+}
+
+function Get-ProxyToken {
+    Ensure-EnvFile
+    $content = Get-Content $envFile -Raw
+    if ($content -match 'PROXY_AUTH_TOKEN=(\S+)') {
+        return $Matches[1]
+    }
+    return $null
+}
+
+function Assert-TokenExists {
+    $token = Get-ProxyToken
+    if (-not $token) {
+        Write-Host "Error: PROXY_AUTH_TOKEN not set. Run '.\copilotproxy.ps1 token' first." -ForegroundColor Red
+        exit 1
+    }
+}
 
 try {
     switch ($Command) {
+        "token" {
+            Ensure-EnvFile
+            $existing = Get-ProxyToken
+            if ($existing) {
+                Write-Host "Token already exists: $existing"
+                Write-Host "To regenerate, delete PROXY_AUTH_TOKEN from .env and run again."
+                return
+            }
+            $token = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+            $content = (Get-Content $envFile -Raw) -replace 'PROXY_AUTH_TOKEN=.*', "PROXY_AUTH_TOKEN=$token"
+            Set-Content -Path $envFile -Value $content.TrimEnd() -NoNewline
+            Write-Host "Generated proxy auth token: $token"
+            Write-Host "Saved to .env"
+        }
         "auth" {
             Write-Host "Starting GitHub OAuth device flow..."
             docker compose run --rm -it copilot-proxy auth
         }
+        "init" {
+            Write-Host "=== Step 1/3: Generating proxy auth token ===" -ForegroundColor Cyan
+            & $PSCommandPath token
+
+            Write-Host ""
+            Write-Host "=== Step 2/3: GitHub OAuth login ===" -ForegroundColor Cyan
+            & $PSCommandPath auth
+
+            Write-Host ""
+            Write-Host "=== Step 3/3: Configuring Claude Code ===" -ForegroundColor Cyan
+            & $PSCommandPath setup-claude-code
+        }
         "setup-claude-code" {
             Write-Host "Configuring Claude Code to use copilot-proxy..."
+            Assert-TokenExists
+            $token = Get-ProxyToken
             $claudeDir = Join-Path $env:USERPROFILE ".claude"
             if (-not (Test-Path $claudeDir)) { New-Item -ItemType Directory -Path $claudeDir -Force | Out-Null }
             $claudeJson = Join-Path $env:USERPROFILE ".claude.json"
@@ -27,18 +79,39 @@ try {
                 -v "${claudeDir}:/root/.claude" `
                 -v "${claudeJson}:/root/.claude.json" `
                 copilot-proxy setup-claude-code @ExtraArgs
+
+            # Set ANTHROPIC_AUTH_TOKEN in Claude's settings so it sends the Bearer token
+            $settingsFile = Join-Path $claudeDir "settings.json"
+            if (Test-Path $settingsFile) {
+                $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
+            } else {
+                $settings = @{} | ConvertTo-Json | ConvertFrom-Json
+            }
+            if (-not $settings.env) {
+                $settings | Add-Member -NotePropertyName "env" -NotePropertyValue @{} -Force
+            }
+            $settings.env | Add-Member -NotePropertyName "ANTHROPIC_AUTH_TOKEN" -NotePropertyValue $token -Force
+            $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsFile
+            Write-Host "Set ANTHROPIC_AUTH_TOKEN in Claude settings."
         }
         "start" {
+            Assert-TokenExists
             docker compose up -d @ExtraArgs
             Write-Host "Copilot proxy running at http://localhost:4141"
         }
         "stop" {
             docker compose down
+            # Also stop tailscale containers if running
+            $tsRunning = docker compose @tsCompose ps --quiet 2>$null
+            if ($tsRunning) {
+                docker compose @tsCompose down
+            }
         }
         "logs" {
             docker compose logs -f @ExtraArgs
         }
         "restart" {
+            Assert-TokenExists
             docker compose restart
         }
         "build" {
@@ -49,6 +122,7 @@ try {
             docker compose @tsCompose run --rm -it tailscale auth
         }
         "tailscale-start" {
+            Assert-TokenExists
             docker compose @tsCompose up -d @ExtraArgs
             Write-Host "Copilot proxy running at http://localhost:4141"
             $hostname = if ($env:TS_HOSTNAME) { $env:TS_HOSTNAME } else { "copilot-proxy" }
@@ -65,11 +139,15 @@ try {
             Write-Host ""
             Write-Host "Usage: .\copilotproxy.ps1 <command>"
             Write-Host ""
-            Write-Host "Commands:"
+            Write-Host "Setup:"
+            Write-Host "  init              Full setup: token + auth + setup-claude-code"
+            Write-Host "  token             Generate proxy auth token (saved to .env)"
             Write-Host "  auth              GitHub OAuth login (first-time setup)"
             Write-Host "  setup-claude-code Configure Claude Code to use this proxy"
+            Write-Host ""
+            Write-Host "Commands:"
             Write-Host "  start             Start the proxy locally (detached)"
-            Write-Host "  stop              Stop the proxy"
+            Write-Host "  stop              Stop all containers (proxy + tailscale)"
             Write-Host "  restart           Restart the proxy"
             Write-Host "  logs              Tail container logs"
             Write-Host "  build             Rebuild the container"
@@ -81,9 +159,8 @@ try {
             Write-Host "  tailscale-build   Rebuild both containers"
             Write-Host ""
             Write-Host "First-time setup:"
-            Write-Host "  1. .\copilotproxy.ps1 auth"
+            Write-Host "  1. .\copilotproxy.ps1 init    (or run token, auth, setup-claude-code separately)"
             Write-Host "  2. .\copilotproxy.ps1 start"
-            Write-Host "  3. .\copilotproxy.ps1 setup-claude-code"
             Write-Host ""
             Write-Host "Proxy will be available at http://localhost:4141"
             exit 1

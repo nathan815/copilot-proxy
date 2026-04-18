@@ -1,0 +1,32 @@
+{
+	admin off
+}
+
+:4141 {
+	# Strip ALL CORS headers from upstream to prevent browser-based token theft.
+	header {
+		-Access-Control-Allow-Origin
+		-Access-Control-Allow-Methods
+		-Access-Control-Allow-Headers
+		-Access-Control-Allow-Credentials
+		-Access-Control-Expose-Headers
+		-Access-Control-Max-Age
+	}
+
+	# Reject CORS preflight requests
+	@preflight method OPTIONS
+	respond @preflight 204
+
+	# No auth: health check, UI dashboard, history
+	@noauth path /health /ui /ui/* /history /history/* /api/* /ws /favicon.ico
+	handle @noauth {
+		reverse_proxy {$PROXY_UPSTREAM:copilot-proxy:4141}
+	}
+
+	# Everything else: require Bearer token, then proxy
+	handle {
+		@notoken not header Authorization "Bearer {$PROXY_AUTH_TOKEN}"
+		respond @notoken "Unauthorized" 401
+		reverse_proxy {$PROXY_UPSTREAM:copilot-proxy:4141}
+	}
+}

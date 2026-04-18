@@ -1,4 +1,17 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: copilot-caddy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4141:4141"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    environment:
+      - PROXY_AUTH_TOKEN=${PROXY_AUTH_TOKEN:?Run .\copilotproxy.ps1 token first}
+    depends_on:
+      - copilot-proxy
+
   copilot-proxy:
     image: ghcr.io/nathan815/copilot-proxy:latest
     build:
@@ -6,8 +19,8 @@ services:
       dockerfile: Dockerfile
     container_name: copilot-proxy
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:4141:4141"
+    expose:
+      - "4141"
     volumes:
       - copilot-data:/root/.local/share/copilot-api
       - ./config.yaml:/root/.local/share/copilot-api/config.yaml:ro

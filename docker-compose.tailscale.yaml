@@ -12,17 +12,25 @@ services:
     volumes:
       - tailscale-state:/var/lib/tailscale
     ports:
-      - "127.0.0.1:4141:4141"
+      - "4141:4141"
     cap_add:
       - NET_ADMIN
     devices:
       - /dev/net/tun:/dev/net/tun
 
-  copilot-proxy:
+  caddy:
     network_mode: service:tailscale
     depends_on:
       - tailscale
     ports: !reset []
+    environment:
+      - PROXY_UPSTREAM=localhost:4142
+
+  copilot-proxy:
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    command: ["start", "--port", "4142"]
 
 volumes:
   tailscale-state:
