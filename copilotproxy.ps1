@@ -12,7 +12,7 @@ Push-Location $PSScriptRoot
 try {
     switch ($Command) {
         "auth" {
-            Write-Host "Starting GitHub OAuth + Tailscale login..."
+            Write-Host "Starting GitHub OAuth device flow..."
             docker compose run --rm -it copilot-proxy auth
         }
         "setup-claude-code" {
@@ -26,11 +26,20 @@ try {
                 -v "${claudeJson}:/root/.claude.json" `
                 copilot-proxy setup-claude-code @ExtraArgs
         }
+        "tailscale-auth" {
+            Write-Host "Starting Tailscale interactive login..."
+            docker compose run --rm -it copilot-proxy tailscale-auth
+        }
+        "tailscale-start" {
+            Write-Host "Starting proxy with Tailscale..."
+            docker compose run -d --rm --service-ports copilot-proxy tailscale-start @ExtraArgs
+            Write-Host "Copilot proxy running at http://localhost:4141"
+            $hostname = if ($env:TS_HOSTNAME) { $env:TS_HOSTNAME } else { "copilot-proxy" }
+            Write-Host "Tailscale hostname: http://${hostname}:4141"
+        }
         "start" {
             docker compose up -d @ExtraArgs
             Write-Host "Copilot proxy running at http://localhost:4141"
-            $hostname = if ($env:TS_HOSTNAME) { $env:TS_HOSTNAME } else { "copilot-proxy" }
-            Write-Host "Tailscale hostname: $hostname"
         }
         "stop" {
             docker compose down
@@ -45,18 +54,22 @@ try {
             docker compose build
         }
         default {
-            Write-Host "copilotproxy - GitHub Copilot API proxy with Tailscale"
+            Write-Host "copilotproxy - GitHub Copilot API proxy"
             Write-Host ""
             Write-Host "Usage: .\copilotproxy.ps1 <command>"
             Write-Host ""
             Write-Host "Commands:"
-            Write-Host "  auth              Interactive setup: GitHub OAuth + Tailscale login"
+            Write-Host "  auth              GitHub OAuth login (first-time setup)"
             Write-Host "  setup-claude-code Configure Claude Code to use this proxy"
-            Write-Host "  start             Start the proxy (detached)"
+            Write-Host "  start             Start the proxy locally (detached)"
             Write-Host "  stop              Stop the proxy"
             Write-Host "  restart           Restart the proxy"
             Write-Host "  logs              Tail container logs"
             Write-Host "  build             Rebuild the container"
+            Write-Host ""
+            Write-Host "Tailscale (optional):"
+            Write-Host "  tailscale-auth    Interactive Tailscale login"
+            Write-Host "  tailscale-start   Start proxy with Tailscale networking"
             Write-Host ""
             Write-Host "First-time setup:"
             Write-Host "  1. .\copilotproxy.ps1 auth"
@@ -64,7 +77,6 @@ try {
             Write-Host "  3. .\copilotproxy.ps1 setup-claude-code"
             Write-Host ""
             Write-Host "Proxy will be available at http://localhost:4141"
-            Write-Host "and via Tailscale at http://copilot-proxy:4141"
             exit 1
         }
     }

@@ -12,32 +12,31 @@ connect_tailscale() {
   if [ -n "$TS_AUTHKEY" ]; then
     tailscale up --authkey="$TS_AUTHKEY" --hostname="$TS_HOSTNAME"
   else
-    # Interactive login — prints a URL for browser auth
     tailscale up --hostname="$TS_HOSTNAME"
   fi
 }
 
 case "$1" in
   auth)
-    # Step 1: GitHub OAuth device flow
-    echo "=== GitHub OAuth ==="
     bun run dist/main.mjs auth
-
-    # Step 2: Tailscale interactive login
-    echo ""
-    echo "=== Tailscale Login ==="
-    start_tailscaled
-    connect_tailscale
-    echo "Tailscale connected as $TS_HOSTNAME"
     ;;
   setup-claude-code)
     shift
     bun run dist/main.mjs setup-claude-code "$@"
     ;;
-  start)
+  tailscale-auth)
+    start_tailscaled
+    connect_tailscale
+    echo "Tailscale connected as $TS_HOSTNAME"
+    ;;
+  tailscale-start)
     shift
     start_tailscaled
     connect_tailscale
+    exec bun run dist/main.mjs start "$@"
+    ;;
+  start)
+    shift
     exec bun run dist/main.mjs start "$@"
     ;;
   *)
