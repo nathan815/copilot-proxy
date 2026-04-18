@@ -23,6 +23,19 @@
 		reverse_proxy {$PROXY_UPSTREAM:copilot-proxy:4141}
 	}
 
+	# Remote setup: validates token in query param, returns setup script
+	handle /setup {
+		@validtoken query token={$PROXY_AUTH_TOKEN}
+		handle @validtoken {
+			root * /etc/caddy
+			templates
+			header Content-Type "text/plain; charset=utf-8"
+			rewrite * /remote-setup.sh
+			file_server
+		}
+		respond "Unauthorized" 401
+	}
+
 	# Everything else: require Bearer token, then proxy
 	handle {
 		@notoken not header Authorization "Bearer {$PROXY_AUTH_TOKEN}"

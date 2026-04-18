@@ -99,6 +99,15 @@ try {
             docker compose up -d @ExtraArgs
             Write-Host "Copilot proxy running at http://localhost:4141"
         }
+        "setup-url" {
+            Assert-TokenExists
+            $token = Get-ProxyToken
+            Write-Host "Run this on your other devices to configure Claude Code:"
+            Write-Host ""
+            Write-Host "  curl -s 'http://copilot-proxy:4141/setup?token=$token' | sh" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "Replace 'copilot-proxy' with your Tailscale hostname if different."
+        }
         "stop" {
             docker compose down
             # Also stop tailscale containers if running
@@ -144,6 +153,7 @@ try {
             Write-Host "  token             Generate proxy auth token (saved to .env)"
             Write-Host "  auth              GitHub OAuth login (first-time setup)"
             Write-Host "  setup-claude-code Configure Claude Code to use this proxy"
+            Write-Host "  setup-url         Print remote setup command for your other devices"
             Write-Host ""
             Write-Host "Commands:"
             Write-Host "  start             Start the proxy locally (detached)"

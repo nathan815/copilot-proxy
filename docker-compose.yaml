@@ -7,6 +7,7 @@ services:
       - "127.0.0.1:4141:4141"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./remote-setup.sh:/etc/caddy/remote-setup.sh:ro
     environment:
       - PROXY_AUTH_TOKEN=${PROXY_AUTH_TOKEN:?Run .\copilotproxy.ps1 token first}
     depends_on:
