@@ -1,23 +1,42 @@
 #!/bin/sh
 set -e
 
-# Start Tailscale daemon in the background
-tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
+TS_HOSTNAME="${TS_HOSTNAME:-copilot-proxy}"
 
-# Wait for tailscaled to be ready
-sleep 2
+start_tailscaled() {
+  tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
+  sleep 2
+}
 
-# Authenticate with Tailscale using the auth key
-if [ -n "$TS_AUTHKEY" ]; then
-  tailscale up --authkey="$TS_AUTHKEY" --hostname="${TS_HOSTNAME:-copilot-proxy}"
-else
-  echo "WARNING: No TS_AUTHKEY set. Tailscale will not connect."
-fi
+connect_tailscale() {
+  if [ -n "$TS_AUTHKEY" ]; then
+    tailscale up --authkey="$TS_AUTHKEY" --hostname="$TS_HOSTNAME"
+  else
+    # Interactive login — prints a URL for browser auth
+    tailscale up --hostname="$TS_HOSTNAME"
+  fi
+}
 
-# If "auth" is passed as first arg, run the GitHub OAuth device flow
-if [ "$1" = "auth" ]; then
-  exec bun run dist/main.mjs auth
-fi
+case "$1" in
+  auth)
+    # Step 1: GitHub OAuth device flow
+    echo "=== GitHub OAuth ==="
+    bun run dist/main.mjs auth
 
-# Start copilot-api (token is read from ~/.local/share/copilot-api/github_token)
-exec bun run dist/main.mjs start "$@"
+    # Step 2: Tailscale interactive login
+    echo ""
+    echo "=== Tailscale Login ==="
+    start_tailscaled
+    connect_tailscale
+    echo "Tailscale connected as $TS_HOSTNAME"
+    ;;
+  start)
+    shift
+    start_tailscaled
+    connect_tailscale
+    exec bun run dist/main.mjs start "$@"
+    ;;
+  *)
+    exec "$@"
+    ;;
+esac
