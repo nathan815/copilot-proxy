@@ -11,6 +11,8 @@ services:
       - TS_HOSTNAME=${TS_HOSTNAME:-copilot-proxy}
     volumes:
       - tailscale-state:/var/lib/tailscale
+    ports:
+      - "4141:4141"
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
