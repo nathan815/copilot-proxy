@@ -65,11 +65,12 @@ Tailscale runs as a separate sidecar container — the proxy container stays unp
 
 ## Security
 
-- **Caddy reverse proxy** fronts copilot-api-js — all traffic goes through Caddy
+copilot-api-js has no built-in authentication or access control — anyone who can reach it gets full access to your Copilot API. Caddy sits in front as a security layer to lock it down:
+
 - **Bearer token auth** on all API endpoints (v1/models, chat/completions, etc.)
 - **Basic auth** on UI, models, and history pages
-- **CORS headers stripped** to prevent browser-based token theft
-- **copilot-proxy binds to localhost** in Tailscale mode (only Caddy can reach it)
+- **CORS headers stripped** — copilot-api-js adds `Access-Control-Allow-Origin: *` by default; Caddy strips these headers to enforce same-origin policy, preventing any external website from making requests to your proxy
+- **copilot-proxy binds to localhost** — only Caddy can reach it, not the network directly
 - Health endpoint (`/health`) is unauthenticated for monitoring
 
 ## Remote Device Setup
