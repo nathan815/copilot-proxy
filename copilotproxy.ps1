@@ -258,11 +258,22 @@ try {
             $errFile = Join-Path $PSScriptRoot "devtunnel-err.log"
             Write-Host "Hosting tunnel $tunnelId on port 4141 (background)..." -ForegroundColor Cyan
             Start-Process -FilePath "devtunnel" -ArgumentList "host", $tunnelId -NoNewWindow -RedirectStandardOutput $logFile -RedirectStandardError $errFile
+            # Wait briefly for log to populate with tunnel URL
+            Start-Sleep 3
+            $tunnelUrl = ""
+            if (Test-Path $logFile) {
+                $tunnelUrl = (Select-String -Path $logFile -Pattern 'Connect via browser: (https://\S+)' | Select-Object -Last 1 | ForEach-Object { $_.Matches[0].Groups[1].Value })
+            }
             Write-Host ""
             Write-Host "Tunnel running in background." -ForegroundColor Green
-            Write-Host "  Remote connect:  devtunnel connect $tunnelId" -ForegroundColor Green
-            Write-Host "  View logs:       .\copilotproxy.ps1 devtunnel-status" -ForegroundColor Yellow
-            Write-Host "  Stop:            .\copilotproxy.ps1 devtunnel-stop" -ForegroundColor Yellow
+            if ($tunnelUrl) {
+                Write-Host "  Setup page:  $tunnelUrl/setup" -ForegroundColor Green
+            }
+            Write-Host "  View logs:   .\copilotproxy.ps1 devtunnel-status" -ForegroundColor Yellow
+            Write-Host "  Stop:        .\copilotproxy.ps1 devtunnel-stop" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "Next: Open the setup page on your remote device, or run:" -ForegroundColor Cyan
+            Write-Host "  .\copilotproxy.ps1 setup-claude-remote" -ForegroundColor Cyan
         }
         "devtunnel-stop" {
             $procs = Get-Process -Name "devtunnel" -ErrorAction SilentlyContinue

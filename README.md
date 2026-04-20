@@ -28,26 +28,33 @@ On host:
 ./copilotproxy.ps1 setup-claude-remote   # Start setup approval server
 ```
 
+On host:
+```powershell
+./copilotproxy.ps1 devtunnel-auth        # One-time: login + create tunnel (saved to .env)
+./copilotproxy.ps1 start                 # Start the proxy
+./copilotproxy.ps1 devtunnel-start       # Host the tunnel in background
+./copilotproxy.ps1 setup-claude-remote   # Start setup approval server
+```
+
 On remote device:
-Install the devtunnel CLI (one-time):
-- **Windows:** `winget install Microsoft.devtunnel`
-- **macOS:** `brew install --cask devtunnel`
-- **Linux:** `curl -sL https://aka.ms/DevTunnelCliInstall | bash`
 
+1. Open the tunnel URL in your browser (printed by `devtunnel-start`, e.g. `https://<id>-4141.<region>.devtunnels.ms/setup`)
+2. Sign in with the same Microsoft/GitHub account that owns the tunnel
+3. Click **Download** and approve on the host machine when prompted
+4. Review and run the script:
 ```sh
-devtunnel connect <tunnel-id>   # Printed by devtunnel-start on host
+cat ~/Downloads/claude-copilot-proxy.sh   # Review first
+sh ~/Downloads/claude-copilot-proxy.sh    # Installs devtunnel, connects, configures Claude
 ```
 
-This forwards localhost:4141 on the remote device to the proxy.
+The setup script handles everything: installs devtunnel CLI if needed, logs in, starts `devtunnel connect` in the background with auto-reconnect, and configures Claude Code.
 
-Navigate to **http://localhost:4141/setup** for step-by-step instructions with copy buttons. Or run:
+Manage the connection on the remote device:
 ```sh
-curl -s http://localhost:4141/setup.sh > claude-copilot-proxy.sh
-cat claude-copilot-proxy.sh   # Review the script
-sh claude-copilot-proxy.sh    # Run it
+sh claude-copilot-proxy.sh reconnect   # Restart devtunnel connect
+sh claude-copilot-proxy.sh stop        # Stop devtunnel connect
+sh claude-copilot-proxy.sh disable     # Remove proxy config from Claude
 ```
-
-Approve on the host machine when prompted.
 
 ### Remote Option 2: Tailscale
 
@@ -62,11 +69,12 @@ On host:
 
 On remote device (must have [Tailscale installed](https://tailscale.com/download) and joined to the same tailnet):
 
-Navigate to **http://copilot-proxy:4141/setup** for step-by-step instructions with copy buttons. Or run:
+1. Navigate to **http://copilot-proxy:4141/setup** for step-by-step instructions
+2. Click **Download** and approve on the host machine when prompted
+3. Review and run the script:
 ```sh
-curl -s http://copilot-proxy:4141/setup.sh > claude-copilot-proxy.sh
-cat claude-copilot-proxy.sh   # Review the script
-sh claude-copilot-proxy.sh    # Run it
+cat ~/Downloads/claude-copilot-proxy.sh   # Review first
+sh ~/Downloads/claude-copilot-proxy.sh    # Configures Claude Code
 ```
 
 Approve on the host machine when prompted.
