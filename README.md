@@ -18,15 +18,7 @@ The proxy will be available at **http://localhost:4141**. UI is available at **h
 
 ### Remote Option 1: Dev Tunnel
 
-Dev Tunnel runs locally on your host machine and tunnels port 4141 to remote devices.
-
-On host:
-```powershell
-./copilotproxy.ps1 devtunnel-auth        # One-time: login + create tunnel (saved to .env)
-./copilotproxy.ps1 start                 # Start the proxy
-./copilotproxy.ps1 devtunnel-start       # Host the tunnel in background
-./copilotproxy.ps1 setup-claude-remote   # Start setup approval server
-```
+Dev Tunnel runs locally on your host machine and tunnels port 4141 to another device.
 
 On host:
 ```powershell
