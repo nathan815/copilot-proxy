@@ -35,6 +35,14 @@ function Assert-TokenExists {
     }
 }
 
+function Get-RunningMode {
+    $ts = docker ps --quiet --filter "name=copilot-proxy-tailscale" 2>$null
+    $local = docker ps --quiet --filter "name=copilot-caddy" 2>$null
+    if ($ts) { return "tailscale" }
+    if ($local) { return "local" }
+    return $null
+}
+
 try {
     switch ($Command) {
         "token" {
@@ -67,11 +75,10 @@ try {
             Write-Host "UI password updated. Login: admin / $newPass"
             $restart = Read-Host "Restart Caddy now to apply? (Y/n)"
             if ($restart -ne 'n') {
-                $tsContainer = docker ps --quiet --filter "name=copilot-proxy-tailscale" 2>$null
-                if ($tsContainer) {
-                    docker compose @tsCompose restart caddy
-                } else {
-                    docker compose restart caddy
+                $mode = Get-RunningMode
+                switch ($mode) {
+                    "tailscale" { docker compose @tsCompose restart caddy }
+                    default { docker compose restart caddy }
                 }
             }
         }
@@ -124,8 +131,8 @@ try {
         }
         "start" {
             Assert-TokenExists
-            $tsContainer = docker ps --quiet --filter "name=copilot-proxy-tailscale" 2>$null
-            if ($tsContainer) {
+            $mode = Get-RunningMode
+            if ($mode -eq "tailscale") {
                 $answer = Read-Host "Tailscale mode is running. Stop and switch to local? (y/N)"
                 if ($answer -ne 'y') { return }
                 docker compose @tsCompose down
@@ -135,16 +142,15 @@ try {
         }
         "setup-claude-remote" {
             Assert-TokenExists
-            # Detect if tailscale container is running
-            $tsContainer = docker ps --quiet --filter "name=copilot-proxy-tailscale" 2>$null
-            if ($tsContainer) {
+            $mode = Get-RunningMode
+            if ($mode -eq "tailscale") {
                 Write-Host "Starting remote setup server (via Tailscale)..." -ForegroundColor Cyan
                 Write-Host ""
-                docker compose @tsCompose --profile setup run --rm -it setup-server
+                docker compose @tsCompose --profile setup run --rm -it --use-aliases setup-server
             } else {
                 Write-Host "Starting remote setup server..." -ForegroundColor Cyan
                 Write-Host ""
-                docker compose --profile setup run --rm -it -p 4143:4143 setup-server
+                docker compose --profile setup run --rm -it --use-aliases setup-server
             }
         }
         "stop" {
@@ -171,9 +177,8 @@ try {
         }
         "tailscale-start" {
             Assert-TokenExists
-            $localCaddy = docker ps --quiet --filter "name=copilot-caddy" 2>$null
-            $tsContainer = docker ps --quiet --filter "name=copilot-proxy-tailscale" 2>$null
-            if ($localCaddy -and -not $tsContainer) {
+            $mode = Get-RunningMode
+            if ($mode -eq "local") {
                 $answer = Read-Host "Local mode is running. Stop and switch to Tailscale? (y/N)"
                 if ($answer -ne 'y') { return }
                 docker compose down
@@ -189,10 +194,112 @@ try {
         "tailscale-build" {
             docker compose @tsCompose build
         }
+        "devtunnel-auth" {
+            if (-not (Get-Command devtunnel -ErrorAction SilentlyContinue)) {
+                Write-Host "devtunnel CLI not found. Install it:" -ForegroundColor Red
+                Write-Host "  winget install Microsoft.devtunnel" -ForegroundColor Yellow
+                Write-Host "  or: https://learn.microsoft.com/azure/developer/dev-tunnels/get-started" -ForegroundColor Yellow
+                return
+            }
+            Write-Host "Starting Dev Tunnel login..."
+            devtunnel login
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Login cancelled or failed." -ForegroundColor Yellow
+                return
+            }
+            Write-Host ""
+            Write-Host "Creating tunnel..." -ForegroundColor Cyan
+            $output = devtunnel create -e 30d 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host ($output | Out-String)
+                Write-Host "Failed to create tunnel." -ForegroundColor Red
+                return
+            }
+            Write-Host ($output | Out-String)
+            $tunnelId = ($output | Select-String -Pattern 'Tunnel ID\s*:\s*(\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value })
+            if ($tunnelId) {
+                Ensure-EnvFile
+                $envContent = Get-Content $envFile -Raw
+                if ($envContent -match 'DEVTUNNEL_ID=') {
+                    $envContent = $envContent -replace 'DEVTUNNEL_ID=.*', "DEVTUNNEL_ID=$tunnelId"
+                } else {
+                    $envContent = $envContent.TrimEnd() + "`nDEVTUNNEL_ID=$tunnelId"
+                }
+                Set-Content -Path $envFile -Value $envContent.TrimEnd() -NoNewline
+                Write-Host ""
+                Write-Host "Tunnel ID saved to .env: $tunnelId" -ForegroundColor Green
+            } else {
+                Write-Host "Could not parse tunnel ID. Check output above and add DEVTUNNEL_ID to .env manually." -ForegroundColor Yellow
+            }
+        }
+        "devtunnel-start" {
+            Assert-TokenExists
+            if (-not (Get-Command devtunnel -ErrorAction SilentlyContinue)) {
+                Write-Host "devtunnel CLI not found. Run 'devtunnel-auth' first." -ForegroundColor Red
+                return
+            }
+            Ensure-EnvFile
+            $envContent = Get-Content $envFile -Raw
+            $tunnelId = if ($envContent -match 'DEVTUNNEL_ID=(\S+)') { $Matches[1] } else { $null }
+            if (-not $tunnelId) {
+                Write-Host "DEVTUNNEL_ID not set. Run '.\copilotproxy.ps1 devtunnel-auth' first." -ForegroundColor Red
+                return
+            }
+            # Ensure proxy is running locally first
+            $mode = Get-RunningMode
+            if (-not $mode) {
+                Write-Host "Starting proxy..." -ForegroundColor Cyan
+                docker compose up -d
+            }
+            # Register port on the tunnel (idempotent - ignores if already exists)
+            Write-Host "Ensuring port 4141 is registered on tunnel..." -ForegroundColor Cyan
+            devtunnel port create $tunnelId -p 4141 2>$null
+            $logFile = Join-Path $PSScriptRoot "devtunnel.log"
+            $errFile = Join-Path $PSScriptRoot "devtunnel-err.log"
+            Write-Host "Hosting tunnel $tunnelId on port 4141 (background)..." -ForegroundColor Cyan
+            Start-Process -FilePath "devtunnel" -ArgumentList "host", $tunnelId -NoNewWindow -RedirectStandardOutput $logFile -RedirectStandardError $errFile
+            Write-Host ""
+            Write-Host "Tunnel running in background." -ForegroundColor Green
+            Write-Host "  Remote connect:  devtunnel connect $tunnelId" -ForegroundColor Green
+            Write-Host "  View logs:       .\copilotproxy.ps1 devtunnel-status" -ForegroundColor Yellow
+            Write-Host "  Stop:            .\copilotproxy.ps1 devtunnel-stop" -ForegroundColor Yellow
+        }
+        "devtunnel-stop" {
+            $procs = Get-Process -Name "devtunnel" -ErrorAction SilentlyContinue
+            if ($procs) {
+                $procs | Stop-Process -Force
+                Write-Host "Dev Tunnel stopped." -ForegroundColor Green
+            } else {
+                Write-Host "No devtunnel process running." -ForegroundColor Yellow
+            }
+        }
+        "devtunnel-status" {
+            $logFile = Join-Path $PSScriptRoot "devtunnel.log"
+            $errFile = Join-Path $PSScriptRoot "devtunnel-err.log"
+            $procs = Get-Process -Name "devtunnel" -ErrorAction SilentlyContinue
+            if ($procs) {
+                Write-Host "Dev Tunnel is running (PID: $($procs.Id -join ', '))" -ForegroundColor Green
+            } else {
+                Write-Host "Dev Tunnel is not running." -ForegroundColor Yellow
+            }
+            if (Test-Path $logFile) {
+                Write-Host ""
+                Write-Host "--- Last 20 lines of devtunnel.log ---" -ForegroundColor Cyan
+                Get-Content $logFile -Tail 20
+            }
+            if ((Test-Path $errFile) -and (Get-Content $errFile -Raw).Trim()) {
+                Write-Host ""
+                Write-Host "--- Last 20 lines of devtunnel-err.log ---" -ForegroundColor Red
+                Get-Content $errFile -Tail 20
+            }
+            if (-not (Test-Path $logFile) -and -not (Test-Path $errFile)) {
+                Write-Host "No log files found." -ForegroundColor Yellow
+            }
+        }
         default {
             Write-Host "copilotproxy - GitHub Copilot API proxy"
             Write-Host ""
-            Write-Host "Usage: .\copilotproxy.ps1 <command>"
+            Write-Host "Usage: .\copilotproxy.ps1 [command]"
             Write-Host ""
             Write-Host "Setup:"
             Write-Host "  init                 Full setup: token + ui-password + login + setup-claude"
@@ -204,10 +311,16 @@ try {
             Write-Host ""
             Write-Host "Commands:"
             Write-Host "  start             Start the proxy locally (detached)"
-            Write-Host "  stop              Stop all containers (proxy + tailscale)"
+            Write-Host "  stop              Stop all containers"
             Write-Host "  restart           Restart the proxy"
             Write-Host "  logs              Tail container logs"
             Write-Host "  build             Rebuild the container"
+            Write-Host ""
+            Write-Host "Dev Tunnel (optional - runs locally, tunnels to proxy):"
+            Write-Host "  devtunnel-auth           Login + create tunnel (saved to .env)"
+            Write-Host "  devtunnel-start          Host tunnel in background"
+            Write-Host "  devtunnel-stop           Stop the tunnel"
+            Write-Host "  devtunnel-status         Show tunnel status + tail logs"
             Write-Host ""
             Write-Host "Tailscale (optional - runs as sidecar container):"
             Write-Host "  tailscale-auth           Interactive Tailscale login"

@@ -8,6 +8,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy-entrypoint.sh:/entrypoint.sh:ro
+      - ./setup.html:/srv/setup.html:ro
     entrypoint: /bin/sh
     command: ["/entrypoint.sh"]
     env_file:
@@ -32,12 +33,12 @@ services:
 
   setup-server:
     image: python:3-alpine
-    container_name: copilot-setup-server
     volumes:
       - ./remote-setup-server.py:/app/remote-setup-server.py:ro
       - ./remote-setup.sh:/etc/caddy/remote-setup.sh:ro
     environment:
       - PROXY_AUTH_TOKEN=${PROXY_AUTH_TOKEN}
+      - PROXY_HOST=localhost:4141
     command: python3 /app/remote-setup-server.py
     profiles:
       - setup

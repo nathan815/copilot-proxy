@@ -23,6 +23,18 @@
 		reverse_proxy {$PROXY_UPSTREAM:copilot-proxy:4141}
 	}
 
+	# /setup: static HTML instructions page (always available)
+	handle /setup {
+		root * /srv
+		rewrite * /setup.html
+		file_server
+	}
+
+	# /setup.sh: proxy to approval server (only when running)
+	handle /setup.sh {
+		reverse_proxy {$SETUP_UPSTREAM:setup-server:4143}
+	}
+
 	# Basic auth: UI, models, history, websocket, API status
 	@uiroutes path /ui /ui/* /history /history/* /api/* /models /ws /favicon.ico
 	handle @uiroutes {

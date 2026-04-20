@@ -1,33 +1,75 @@
 # copilot-proxy
 
-Dockerized [copilot-api-js](https://github.com/puxu-msft/copilot-api-js) reverse proxy that exposes GitHub Copilot's API as OpenAI/Anthropic compatible endpoints. Secured with Caddy reverse proxy (Bearer token auth + UI basic auth), with optional Tailscale networking for remote device access.
+Dockerized [copilot-api-js](https://github.com/puxu-msft/copilot-api-js) reverse proxy that exposes GitHub Copilot's API as OpenAI/Anthropic compatible endpoints. Secured with Caddy reverse proxy (Bearer token auth + UI basic auth), with optional Dev Tunnel or Tailscale networking for remote device access.
 
 ## Quick Start
 
 ```powershell
-# Full setup (generates tokens, OAuth login, configures Claude Code)
-.\copilotproxy.ps1 init
+# Full setup (generates tokens, OAuth login, configures Claude Code) (token + ui-password + login + setup-claude)
+./copilotproxy.ps1 init
 
-# Start the proxy (choose one)
-.\copilotproxy.ps1 start            # Local only
-# OR
-.\copilotproxy.ps1 tailscale-auth   # One-time Tailscale login
-.\copilotproxy.ps1 tailscale-start  # Start with Tailscale (accessible on tailnet)
+# Start the proxy (local only)
+./copilotproxy.ps1 start
 ```
 
-Or run each step individually:
+The proxy will be available at **http://localhost:4141**. UI is available at **http://localhost:4141/ui**.
 
+## Quick Start - Remote Access
+
+### Remote Option 1: Dev Tunnel
+
+Dev Tunnel runs locally on your host machine and tunnels port 4141 to remote devices.
+
+On host:
 ```powershell
-.\copilotproxy.ps1 token         # Generate proxy auth token
-.\copilotproxy.ps1 ui-password   # Set UI basic auth password
-.\copilotproxy.ps1 login         # GitHub OAuth device flow
-.\copilotproxy.ps1 setup-claude  # Configure Claude Code
-.\copilotproxy.ps1 start         # Start the proxy (local only)
-# OR
-.\copilotproxy.ps1 tailscale-start  # Start with Tailscale (accessible on tailnet)
+./copilotproxy.ps1 devtunnel-auth        # One-time: login + create tunnel (saved to .env)
+./copilotproxy.ps1 start                 # Start the proxy
+./copilotproxy.ps1 devtunnel-start       # Host the tunnel in background
+./copilotproxy.ps1 setup-claude-remote   # Start setup approval server
 ```
 
-The proxy will be available at **http://localhost:4141** (or **http://copilot-proxy:4141** on your tailnet).
+On remote device:
+Install the devtunnel CLI (one-time):
+- **Windows:** `winget install Microsoft.devtunnel`
+- **macOS:** `brew install --cask devtunnel`
+- **Linux:** `curl -sL https://aka.ms/DevTunnelCliInstall | bash`
+
+```sh
+devtunnel connect <tunnel-id>   # Printed by devtunnel-start on host
+```
+
+This forwards localhost:4141 on the remote device to the proxy.
+
+Navigate to **http://localhost:4141/setup** for step-by-step instructions with copy buttons. Or run:
+```sh
+curl -s http://localhost:4141/setup.sh > claude-copilot-proxy.sh
+cat claude-copilot-proxy.sh   # Review the script
+sh claude-copilot-proxy.sh    # Run it
+```
+
+Approve on the host machine when prompted.
+
+### Remote Option 2: Tailscale
+
+Tailscale runs as a sidecar container — the proxy container stays unprivileged.
+
+On host:
+```powershell
+./copilotproxy.ps1 tailscale-auth        # One-time Tailscale login
+./copilotproxy.ps1 tailscale-start       # Start with Tailscale sidecar
+./copilotproxy.ps1 setup-claude-remote   # Start setup approval server
+```
+
+On remote device (must be on the same tailnet):
+
+Navigate to **http://copilot-proxy:4141/setup** for step-by-step instructions with copy buttons. Or run:
+```sh
+curl -s http://copilot-proxy:4141/setup.sh > claude-copilot-proxy.sh
+cat claude-copilot-proxy.sh   # Review the script
+sh claude-copilot-proxy.sh    # Run it
+```
+
+Approve on the host machine when prompted.
 
 ## Commands
 
@@ -47,10 +89,21 @@ The proxy will be available at **http://localhost:4141** (or **http://copilot-pr
 | Command | Description |
 |---------|-------------|
 | `start` | Start the proxy locally (detached) |
-| `stop` | Stop all containers (proxy + tailscale) |
+| `stop` | Stop all containers |
 | `restart` | Restart the proxy |
 | `logs` | Tail container logs |
 | `build` | Rebuild the container |
+
+### Dev Tunnel (optional)
+
+Dev Tunnel runs locally on the host (not in Docker). Requires the [devtunnel CLI](https://learn.microsoft.com/azure/developer/dev-tunnels/get-started) (`winget install Microsoft.devtunnel`).
+
+| Command | Description |
+|---------|-------------|
+| `devtunnel-auth` | Login + create tunnel (saved to .env) |
+| `devtunnel-start` | Host tunnel in background |
+| `devtunnel-stop` | Stop the tunnel |
+| `devtunnel-status` | Show tunnel status + tail logs |
 
 ### Tailscale (optional)
 
@@ -72,22 +125,7 @@ copilot-api-js has no built-in authentication or access control — anyone who c
 - **CORS headers stripped** — copilot-api-js adds `Access-Control-Allow-Origin: *` by default; Caddy strips these headers to enforce same-origin policy, preventing any external website from making requests to your proxy
 - **copilot-proxy binds to localhost** — only Caddy can reach it, not the network directly
 - Health endpoint (`/health`) is unauthenticated for monitoring
-
-## Remote Device Setup
-
-Set up Claude Code on your other devices through the tailnet:
-
-```powershell
-# On your main machine — starts an interactive approval server
-.\copilotproxy.ps1 setup-claude-remote
-```
-
-```sh
-# On the remote device — waits for your approval
-curl -s copilot-proxy:4143 | sh
-```
-
-The approval server shows the remote device's IP and hostname, and waits for your y/N confirmation before serving the setup script with credentials.
+- `/setup` serves a static instructions page (no credentials); `/setup.sh` only works when the approval server is running and requires interactive approval
 
 ## Architecture
 
@@ -98,7 +136,12 @@ The approval server shows the remote device's IP and hostname, and waits for you
 │  ┌───────────────────────────────────────────┐   │
 │  │ Caddy (reverse proxy)                     │   │
 │  │ :4141 — Bearer auth, basic auth, CORS     │   │
-│  │        ↓                                  │   │
+│  │   /setup    → static HTML instructions    │   │
+│  │   /setup.sh → setup-server (approval)     │   │
+│  │   /*        → copilot-api-js              │   │
+│  └───────────────────────────────────────────┘   │
+│                                                  │
+│  ┌───────────────────────────────────────────┐   │
 │  │ copilot-api-js (bun)                      │   │
 │  │ :4142 (localhost only, via Caddy)          │   │
 │  └───────────────────────────────────────────┘   │
@@ -111,12 +154,16 @@ The approval server shows the remote device's IP and hostname, and waits for you
 │                                                  │
 │  ┌───────────────────────────────────────────┐   │  (optional)
 │  │ tailscale sidecar (NET_ADMIN)             │   │
-│  │ publishes :4141 and :4143 to tailnet      │   │
+│  │ publishes :4141 to tailnet                │   │
 │  └───────────────────────────────────────────┘   │
+│                                                  │
+│         devtunnel (runs on host, not Docker)     │  (optional)
+│         tunnels :4141 to remote devices          │
 └─────────────────────────────────────────────────┘
 ```
 
-- **Caddyfile** — Reverse proxy config: Bearer auth, basic auth, CORS stripping
+- **Caddyfile** — Reverse proxy config: Bearer auth, basic auth, CORS stripping, /setup routing
+- **setup.html** — Static setup instructions page served by Caddy at /setup
 - **Dockerfile** — Multi-stage build: clones and builds copilot-api-js at pinned commit
 - **Dockerfile.tailscale** — Lightweight sidecar based on `tailscale/tailscale:v1.96.5`
 - **docker-compose.yaml** — Local-only, no elevated privileges

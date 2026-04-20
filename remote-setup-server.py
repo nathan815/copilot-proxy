@@ -3,10 +3,10 @@
 
 Flow:
 1. Operator runs `setup-claude-remote` (interactive terminal)
-2. Remote device curls http://copilot-proxy:4143/ directly
-3. Operator sees the remote IP and approves/denies via y/N prompt
-4. Remote device receives the setup script or denial
-5. Server exits after one request
+2. Remote device curls http://<host>:4141/setup (Caddy proxies non-browser to here)
+3. Operator sees request details and approves/denies
+4. Approved requests receive the setup script with token embedded
+5. Server exits after serving one setup script
 """
 
 import http.server
@@ -18,12 +18,16 @@ import threading
 
 PORT = int(os.environ.get("SETUP_PORT", "4143"))
 PROXY_AUTH_TOKEN = os.environ.get("PROXY_AUTH_TOKEN", "")
-PROXY_HOST = os.environ.get("PROXY_HOST", "copilot-proxy:4141")
+PROXY_HOST = os.environ.get("PROXY_HOST", "localhost:4141")
 SETUP_SCRIPT_PATH = "/etc/caddy/remote-setup.sh"
 
 
 class SetupHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        self._serve_script()
+
+    def _serve_script(self):
+        """Approval flow — serve setup script after operator approval."""
         remote_ip = self.headers.get("X-Forwarded-For", self.client_address[0])
         user_agent = self.headers.get("User-Agent", "unknown")
         try:
@@ -74,7 +78,7 @@ class SetupHandler(http.server.BaseHTTPRequestHandler):
                 exit 1
             """).encode())
 
-        # Exit after one request
+        # Exit after one script request
         threading.Thread(target=self.server.shutdown).start()
 
     def log_message(self, format, *args):
@@ -88,9 +92,9 @@ def main():
 
     server = http.server.HTTPServer(("0.0.0.0", PORT), SetupHandler)
     print(f"Remote setup server running on port {PORT}")
-    print(f"Run this on your other device:")
     print(f"")
-    print(f"  curl -s {PROXY_HOST.split(':')[0]}:{PORT} | sh")
+    print(f"On remote device, run:")
+    print(f"  curl -s http://{PROXY_HOST}/setup.sh > claude-copilot-proxy.sh && sh claude-copilot-proxy.sh")
     print(f"")
     print(f"Waiting for request... (Ctrl+C to cancel)")
 

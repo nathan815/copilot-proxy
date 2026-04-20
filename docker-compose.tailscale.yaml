@@ -13,7 +13,6 @@ services:
       - tailscale-state:/var/lib/tailscale
     ports:
       - "4141:4141"
-      - "4143:4143"
     cap_add:
       - NET_ADMIN
     devices:
@@ -33,6 +32,7 @@ services:
     ports: !reset []
     environment:
       - PROXY_UPSTREAM=127.0.0.1:4142
+      - SETUP_UPSTREAM=127.0.0.1:4143
 
   copilot-proxy:
     network_mode: service:tailscale
@@ -47,6 +47,8 @@ services:
     depends_on:
       tailscale:
         condition: service_healthy
+    environment:
+      - PROXY_HOST=copilot-proxy:4141
 
 volumes:
   tailscale-state:

@@ -3,8 +3,8 @@
 # Configures Claude Code on this device to use your proxy.
 #
 # Usage:
-#   curl -s http://copilot-proxy:4143/ | sh            # enable (default)
-#   sh copilot-proxy-setup.sh disable                   # disable (restore direct Anthropic)
+#   curl -s http://copilot-proxy:4141/setup | sh         # enable (default)
+#   sh copilot-proxy-setup.sh disable                    # disable (restore direct Anthropic)
 
 set -e
 
