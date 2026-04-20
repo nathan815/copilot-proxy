@@ -18,7 +18,8 @@ import threading
 
 PORT = int(os.environ.get("SETUP_PORT", "4143"))
 PROXY_AUTH_TOKEN = os.environ.get("PROXY_AUTH_TOKEN", "")
-PROXY_HOST = os.environ.get("PROXY_HOST", "localhost:4141")
+PROXY_HOST = os.environ.get("PROXY_HOST", "127.0.0.1:4141")
+DEVTUNNEL_ID = os.environ.get("DEVTUNNEL_ID", "")
 SETUP_SCRIPT_PATH = "/etc/caddy/remote-setup.sh"
 
 
@@ -53,11 +54,9 @@ class SetupHandler(http.server.BaseHTTPRequestHandler):
             try:
                 with open(SETUP_SCRIPT_PATH, "r") as f:
                     script = f.read()
-                script = script.replace("{{.Req.Host}}", PROXY_HOST)
-                script = script.replace(
-                    '{{placeholder "http.request.uri.query.token"}}',
-                    PROXY_AUTH_TOKEN,
-                )
+                script = script.replace("{{PROXY_HOST}}", PROXY_HOST)
+                script = script.replace("{{AUTH_TOKEN}}", PROXY_AUTH_TOKEN)
+                script = script.replace("{{DEVTUNNEL_ID}}", DEVTUNNEL_ID)
             except FileNotFoundError:
                 script = "#!/bin/sh\necho 'Error: setup script not found'\nexit 1\n"
 

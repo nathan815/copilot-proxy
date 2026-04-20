@@ -55,11 +55,8 @@
     <div class="step">
         <p class="where">On remote device</p>
         <h3>Step 2: Download the setup script</h3>
-        <div class="cmd">
-            <pre><code id="curl-cmd">curl -s <span id="setup-url"></span>/setup.sh &gt; claude-copilot-proxy.sh</code></pre>
-            <button class="copy-btn" onclick="copyCmd(this)">Copy</button>
-        </div>
-        <p class="note">Requires approval from the host machine (Step 1). The host will see your hostname/IP.</p>
+        <p><button class="copy-btn" id="download-btn" onclick="downloadScript()" style="padding:10px 20px;font-size:1rem;">Download claude-copilot-proxy.sh</button></p>
+        <p class="note" id="download-note">Requires approval from the host machine (Step 1). The host will see your hostname/IP.</p>
     </div>
 
     <div class="step">
@@ -79,12 +76,54 @@
             <pre><code>sh claude-copilot-proxy.sh</code></pre>
             <button class="copy-btn" onclick="copyCmd(this)">Copy</button>
         </div>
-        <p class="note">Configures Claude Code with the proxy URL and auth token.</p>
+        <p class="note">Handles everything: installs devtunnel (if needed), logs in, connects in background with auto-reconnect, and configures Claude Code.
+            <br>Other commands: <code>sh claude-copilot-proxy.sh reconnect</code>, <code>sh claude-copilot-proxy.sh stop</code>, <code>sh claude-copilot-proxy.sh disable</code></p>
     </div>
 
     <script>
-    // Fill in the URL dynamically based on how the user reached this page
-    document.getElementById('setup-url').textContent = window.location.origin;
+    function downloadScript() {
+        var btn = document.getElementById('download-btn');
+        var note = document.getElementById('download-note');
+        btn.disabled = true;
+        btn.textContent = 'Waiting for approval...';
+        note.textContent = 'Request sent. Approve on the host machine.';
+        note.style.color = '#0078d4';
+
+        fetch('/setup.sh')
+            .then(function(res) {
+                if (res.status === 502) {
+                    note.textContent = 'Error: Approval server is not running. Run .\\copilotproxy.ps1 setup-claude-remote on the host first.';
+                    note.style.color = '#d32f2f';
+                    btn.textContent = 'Download claude-copilot-proxy.sh';
+                    btn.disabled = false;
+                    return;
+                }
+                if (!res.ok) {
+                    note.textContent = 'Error: ' + res.status + ' ' + res.statusText;
+                    note.style.color = '#d32f2f';
+                    btn.textContent = 'Download claude-copilot-proxy.sh';
+                    btn.disabled = false;
+                    return;
+                }
+                return res.text().then(function(text) {
+                    var blob = new Blob([text], { type: 'text/plain' });
+                    var a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = 'claude-copilot-proxy.sh';
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                    note.textContent = 'Downloaded! Review it with: cat ~/Downloads/claude-copilot-proxy.sh';
+                    note.style.color = '#107c10';
+                    btn.textContent = 'Downloaded!';
+                });
+            })
+            .catch(function(err) {
+                note.textContent = 'Network error: ' + err.message;
+                note.style.color = '#d32f2f';
+                btn.textContent = 'Download claude-copilot-proxy.sh';
+                btn.disabled = false;
+            });
+    }
 
     function copyCmd(btn) {
         const code = btn.parentElement.querySelector('code').textContent;

@@ -278,7 +278,7 @@ try {
             $errFile = Join-Path $PSScriptRoot "devtunnel-err.log"
             $procs = Get-Process -Name "devtunnel" -ErrorAction SilentlyContinue
             if ($procs) {
-                Write-Host "Dev Tunnel is running (PID: $($procs.Id -join ', '))" -ForegroundColor Green
+                Write-Host "Dev Tunnel is running (PID: $(@($procs) | ForEach-Object { $_.Id } | Join-String -Separator ', '))" -ForegroundColor Green
             } else {
                 Write-Host "Dev Tunnel is not running." -ForegroundColor Yellow
             }
@@ -287,7 +287,7 @@ try {
                 Write-Host "--- Last 20 lines of devtunnel.log ---" -ForegroundColor Cyan
                 Get-Content $logFile -Tail 20
             }
-            if ((Test-Path $errFile) -and (Get-Content $errFile -Raw).Trim()) {
+            if ((Test-Path $errFile) -and ((Get-Content $errFile -Raw -ErrorAction SilentlyContinue) ?? '').Trim()) {
                 Write-Host ""
                 Write-Host "--- Last 20 lines of devtunnel-err.log ---" -ForegroundColor Red
                 Get-Content $errFile -Tail 20
