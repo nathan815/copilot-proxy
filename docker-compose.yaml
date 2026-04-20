@@ -40,6 +40,7 @@ services:
       - PROXY_AUTH_TOKEN=${PROXY_AUTH_TOKEN}
       - PROXY_HOST=127.0.0.1:4141
       - DEVTUNNEL_ID=${DEVTUNNEL_ID:-}
+      - DEVTUNNEL_URL=${DEVTUNNEL_URL:-}
     command: python3 /app/remote-setup-server.py
     profiles:
       - setup

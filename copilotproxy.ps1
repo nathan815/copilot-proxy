@@ -245,6 +245,13 @@ try {
                 Write-Host "DEVTUNNEL_ID not set. Run '.\copilotproxy.ps1 devtunnel-auth' first." -ForegroundColor Red
                 return
             }
+            # Check if devtunnel is already running
+            $existingProcs = Get-Process -Name "devtunnel" -ErrorAction SilentlyContinue
+            if ($existingProcs) {
+                Write-Host "devtunnel is already running (PID: $(($existingProcs | ForEach-Object { $_.Id }) -join ', '))." -ForegroundColor Yellow
+                Write-Host "Run '.\copilotproxy.ps1 devtunnel-stop' first, or '.\copilotproxy.ps1 devtunnel-status' to check." -ForegroundColor Yellow
+                return
+            }
             # Ensure proxy is running locally first
             $mode = Get-RunningMode
             if (-not $mode) {
@@ -264,15 +271,32 @@ try {
             if (Test-Path $logFile) {
                 $tunnelUrl = (Select-String -Path $logFile -Pattern 'Connect via browser: (https://\S+)' | Select-Object -Last 1 | ForEach-Object { $_.Matches[0].Groups[1].Value })
             }
+            if ($tunnelUrl) {
+                # Save tunnel URL to .env for setup-server
+                Ensure-EnvFile
+                $envContent = Get-Content $envFile -Raw
+                if ($envContent -match 'DEVTUNNEL_URL=') {
+                    $envContent = $envContent -replace 'DEVTUNNEL_URL=.*', "DEVTUNNEL_URL=$tunnelUrl"
+                } else {
+                    $envContent = $envContent.TrimEnd() + "`nDEVTUNNEL_URL=$tunnelUrl"
+                }
+                Set-Content -Path $envFile -Value $envContent.TrimEnd() -NoNewline
+            }
             Write-Host ""
             Write-Host "Tunnel running in background." -ForegroundColor Green
-            if ($tunnelUrl) {
-                Write-Host "  Setup page:  $tunnelUrl/setup" -ForegroundColor Green
-            }
-            Write-Host "  View logs:   .\copilotproxy.ps1 devtunnel-status" -ForegroundColor Yellow
-            Write-Host "  Stop:        .\copilotproxy.ps1 devtunnel-stop" -ForegroundColor Yellow
+            Write-Host "  Logs:   $logFile" -ForegroundColor Yellow
+            Write-Host "  Errors: $errFile" -ForegroundColor Yellow
+            Write-Host "  Status: .\copilotproxy.ps1 devtunnel-status" -ForegroundColor Yellow
+            Write-Host "  Stop:   .\copilotproxy.ps1 devtunnel-stop" -ForegroundColor Yellow
             Write-Host ""
-            Write-Host "Next: Open the setup page on your remote device, or run:" -ForegroundColor Cyan
+            Write-Host "Next: Open the setup page on your remote device:" -ForegroundColor Cyan
+            if ($tunnelUrl) {
+                Write-Host "  $tunnelUrl/setup" -ForegroundColor Green
+            } else {
+                Write-Host "  (tunnel URL not yet available - check devtunnel-status)" -ForegroundColor Yellow
+            }
+            Write-Host ""
+            Write-Host "Then run:" -ForegroundColor Cyan
             Write-Host "  .\copilotproxy.ps1 setup-claude-remote" -ForegroundColor Cyan
         }
         "devtunnel-stop" {
@@ -295,12 +319,12 @@ try {
             }
             if (Test-Path $logFile) {
                 Write-Host ""
-                Write-Host "--- Last 20 lines of devtunnel.log ---" -ForegroundColor Cyan
+                Write-Host "--- Last 20 lines of $logFile ---" -ForegroundColor Cyan
                 Get-Content $logFile -Tail 20
             }
             if ((Test-Path $errFile) -and ((Get-Content $errFile -Raw -ErrorAction SilentlyContinue) ?? '').Trim()) {
                 Write-Host ""
-                Write-Host "--- Last 20 lines of devtunnel-err.log ---" -ForegroundColor Red
+                Write-Host "--- Last 20 lines of $errFile ---" -ForegroundColor Red
                 Get-Content $errFile -Tail 20
             }
             if (-not (Test-Path $logFile) -and -not (Test-Path $errFile)) {

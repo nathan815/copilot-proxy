@@ -20,6 +20,7 @@ PORT = int(os.environ.get("SETUP_PORT", "4143"))
 PROXY_AUTH_TOKEN = os.environ.get("PROXY_AUTH_TOKEN", "")
 PROXY_HOST = os.environ.get("PROXY_HOST", "127.0.0.1:4141")
 DEVTUNNEL_ID = os.environ.get("DEVTUNNEL_ID", "")
+DEVTUNNEL_URL = os.environ.get("DEVTUNNEL_URL", "")
 SETUP_SCRIPT_PATH = "/etc/caddy/remote-setup.sh"
 
 
@@ -92,8 +93,12 @@ def main():
     server = http.server.HTTPServer(("0.0.0.0", PORT), SetupHandler)
     print(f"Remote setup server running on port {PORT}")
     print(f"")
-    print(f"On remote device, open the setup page:")
-    print(f"  http://{PROXY_HOST}/setup")
+    if DEVTUNNEL_URL:
+        print(f"On remote device, open the setup page:")
+        print(f"  {DEVTUNNEL_URL}/setup")
+    else:
+        print(f"On remote device, open the setup page:")
+        print(f"  http://{PROXY_HOST}/setup")
     print(f"")
     print(f"Then click Download and approve below when prompted.")
     print(f"")
