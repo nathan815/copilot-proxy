@@ -92,8 +92,10 @@ def main():
     server = http.server.HTTPServer(("0.0.0.0", PORT), SetupHandler)
     print(f"Remote setup server running on port {PORT}")
     print(f"")
-    print(f"On remote device, run:")
-    print(f"  curl -s http://{PROXY_HOST}/setup.sh > claude-copilot-proxy.sh && sh claude-copilot-proxy.sh")
+    print(f"On remote device, open the setup page:")
+    print(f"  http://{PROXY_HOST}/setup")
+    print(f"")
+    print(f"Then click Download and approve below when prompted.")
     print(f"")
     print(f"Waiting for request... (Ctrl+C to cancel)")
 

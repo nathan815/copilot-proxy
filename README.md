@@ -41,7 +41,7 @@ On remote device:
 1. Open the tunnel URL in your browser (printed by `devtunnel-start`, e.g. `https://<id>-4141.<region>.devtunnels.ms/setup`)
 2. Sign in with the same Microsoft/GitHub account that owns the tunnel
 3. Click **Download** and approve on the host machine when prompted
-4. Review and run the script:
+4. Review, then run the script:
 ```sh
 cat ~/Downloads/claude-copilot-proxy.sh   # Review first
 sh ~/Downloads/claude-copilot-proxy.sh    # Installs devtunnel, connects, configures Claude
@@ -71,7 +71,7 @@ On remote device (must have [Tailscale installed](https://tailscale.com/download
 
 1. Navigate to **http://copilot-proxy:4141/setup** for step-by-step instructions
 2. Click **Download** and approve on the host machine when prompted
-3. Review and run the script:
+3. Review, then run the script:
 ```sh
 cat ~/Downloads/claude-copilot-proxy.sh   # Review first
 sh ~/Downloads/claude-copilot-proxy.sh    # Configures Claude Code
