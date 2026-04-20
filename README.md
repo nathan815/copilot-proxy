@@ -60,7 +60,7 @@ On host:
 ./copilotproxy.ps1 setup-claude-remote   # Start setup approval server
 ```
 
-On remote device (must be on the same tailnet):
+On remote device (must have [Tailscale installed](https://tailscale.com/download) and joined to the same tailnet):
 
 Navigate to **http://copilot-proxy:4141/setup** for step-by-step instructions with copy buttons. Or run:
 ```sh
@@ -126,6 +126,13 @@ copilot-api-js has no built-in authentication or access control — anyone who c
 - **copilot-proxy binds to localhost** — only Caddy can reach it, not the network directly
 - Health endpoint (`/health`) is unauthenticated for monitoring
 - `/setup` serves a static instructions page (no credentials); `/setup.sh` only works when the approval server is running and requires interactive approval
+
+### Remote Access Security
+
+Both remote access options add a network-level authentication layer on top of Caddy's auth:
+
+- **Dev Tunnel** — Tunnels are private by default: only the Microsoft/GitHub account that created the tunnel can `devtunnel connect` to it. Remote devices must authenticate with `devtunnel login` using the same account. Widening access (org/public) is **not allowed or endorsed by this project** — the proxy is intended for single-user access only. See [Dev Tunnel access control](https://learn.microsoft.com/en-us/azure/developer/dev-tunnels/access-control) for details.
+- **Tailscale** — Only devices joined to your tailnet can reach the proxy. Tailscale uses WireGuard for encrypted point-to-point connections. No ports are exposed to the public internet. Sharing the proxy with others via Tailscale sharing or ACLs is **not allowed or endorsed by this project**.
 
 ## Architecture
 
