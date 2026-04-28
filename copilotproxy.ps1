@@ -264,7 +264,8 @@ try {
             $logFile = Join-Path $PSScriptRoot "devtunnel.log"
             $errFile = Join-Path $PSScriptRoot "devtunnel-err.log"
             Write-Host "Hosting tunnel $tunnelId on port 4141 (background)..." -ForegroundColor Cyan
-            Start-Process -FilePath "devtunnel" -ArgumentList "host", $tunnelId -NoNewWindow -RedirectStandardOutput $logFile -RedirectStandardError $errFile
+            $proc = Start-Process -FilePath "devtunnel" -ArgumentList "host", $tunnelId -NoNewWindow -RedirectStandardOutput $logFile -RedirectStandardError $errFile -PassThru
+            $proc.Id | Set-Content (Join-Path $PSScriptRoot "devtunnel.pid")
             # Wait briefly for log to populate with tunnel URL
             Start-Sleep 3
             $tunnelUrl = ""
@@ -289,6 +290,9 @@ try {
             Write-Host "  Status: .\copilotproxy.ps1 devtunnel-status" -ForegroundColor Yellow
             Write-Host "  Stop:   .\copilotproxy.ps1 devtunnel-stop" -ForegroundColor Yellow
             Write-Host ""
+            # Auto-start watchdog
+            & $PSCommandPath devtunnel-watchdog
+            Write-Host ""
             Write-Host "Next: Open the setup page on your remote device:" -ForegroundColor Cyan
             if ($tunnelUrl) {
                 Write-Host "  $tunnelUrl/setup" -ForegroundColor Green
@@ -300,9 +304,36 @@ try {
             Write-Host "  .\copilotproxy.ps1 setup-claude-remote" -ForegroundColor Cyan
         }
         "devtunnel-stop" {
+            # Stop watchdog first if running
+            $wdPidFile = Join-Path $PSScriptRoot "devtunnel-watchdog.pid"
+            if (Test-Path $wdPidFile) {
+                $wdPid = [int](Get-Content $wdPidFile -Raw).Trim()
+                $wdProc = Get-Process -Id $wdPid -ErrorAction SilentlyContinue
+                if ($wdProc -and $wdProc.ProcessName -match 'powershell|pwsh') {
+                    Stop-Process -Id $wdPid -Force
+                    Write-Host "Watchdog stopped (PID $wdPid)." -ForegroundColor Green
+                }
+                Remove-Item $wdPidFile -Force -ErrorAction SilentlyContinue
+            }
+            # Stop devtunnel
+            $pidFile = Join-Path $PSScriptRoot "devtunnel.pid"
+            $stopped = $false
+            if (Test-Path $pidFile) {
+                $dtPid = [int](Get-Content $pidFile -Raw).Trim()
+                $dtProc = Get-Process -Id $dtPid -ErrorAction SilentlyContinue
+                if ($dtProc -and $dtProc.ProcessName -eq 'devtunnel') {
+                    Stop-Process -Id $dtPid -Force
+                    $stopped = $true
+                }
+                Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+            }
+            # Fallback: kill any remaining devtunnel processes
             $procs = Get-Process -Name "devtunnel" -ErrorAction SilentlyContinue
             if ($procs) {
                 $procs | Stop-Process -Force
+                $stopped = $true
+            }
+            if ($stopped) {
                 Write-Host "Dev Tunnel stopped." -ForegroundColor Green
             } else {
                 Write-Host "No devtunnel process running." -ForegroundColor Yellow
@@ -311,11 +342,32 @@ try {
         "devtunnel-status" {
             $logFile = Join-Path $PSScriptRoot "devtunnel.log"
             $errFile = Join-Path $PSScriptRoot "devtunnel-err.log"
+            $pidFile = Join-Path $PSScriptRoot "devtunnel.pid"
+            $wdPidFile = Join-Path $PSScriptRoot "devtunnel-watchdog.pid"
+            $wdLogFile = Join-Path $PSScriptRoot "devtunnel-watchdog.log"
+
+            # Tunnel status
             $procs = Get-Process -Name "devtunnel" -ErrorAction SilentlyContinue
             if ($procs) {
                 Write-Host "Dev Tunnel is running (PID: $(@($procs) | ForEach-Object { $_.Id } | Join-String -Separator ', '))" -ForegroundColor Green
             } else {
                 Write-Host "Dev Tunnel is not running." -ForegroundColor Yellow
+            }
+
+            # Watchdog status
+            $wdRunning = $false
+            if (Test-Path $wdPidFile) {
+                $wdPid = [int](Get-Content $wdPidFile -Raw).Trim()
+                $wdProc = Get-Process -Id $wdPid -ErrorAction SilentlyContinue
+                if ($wdProc -and $wdProc.ProcessName -match 'powershell|pwsh') {
+                    Write-Host "Watchdog is running (PID: $wdPid)" -ForegroundColor Green
+                    $wdRunning = $true
+                } else {
+                    Write-Host "Watchdog is not running (stale PID file)." -ForegroundColor Yellow
+                    Remove-Item $wdPidFile -Force -ErrorAction SilentlyContinue
+                }
+            } else {
+                Write-Host "Watchdog is not running." -ForegroundColor Yellow
             }
             if (Test-Path $logFile) {
                 Write-Host ""
@@ -330,9 +382,62 @@ try {
             if (-not (Test-Path $logFile) -and -not (Test-Path $errFile)) {
                 Write-Host "No log files found." -ForegroundColor Yellow
             }
+            if ((Test-Path $wdLogFile) -and ((Get-Content $wdLogFile -Raw -ErrorAction SilentlyContinue) ?? '').Trim()) {
+                Write-Host ""
+                Write-Host "--- Last 10 lines of $wdLogFile ---" -ForegroundColor Magenta
+                Get-Content $wdLogFile -Tail 10
+            }
+        }
+        "devtunnel-watchdog" {
+            Assert-TokenExists
+            $wdPidFile = Join-Path $PSScriptRoot "devtunnel-watchdog.pid"
+
+            # Check if watchdog is already running
+            if (Test-Path $wdPidFile) {
+                $existPid = [int](Get-Content $wdPidFile -Raw).Trim()
+                $existProc = Get-Process -Id $existPid -ErrorAction SilentlyContinue
+                if ($existProc -and $existProc.ProcessName -match 'powershell|pwsh') {
+                    Write-Host "Watchdog is already running (PID: $existPid)." -ForegroundColor Yellow
+                    Write-Host "Run '.\copilotproxy.ps1 devtunnel-watchdog-stop' first." -ForegroundColor Yellow
+                    return
+                }
+                Remove-Item $wdPidFile -Force -ErrorAction SilentlyContinue
+            }
+
+            # Ensure devtunnel is running first
+            $dtProcs = Get-Process -Name "devtunnel" -ErrorAction SilentlyContinue
+            if (-not $dtProcs) {
+                Write-Host "Devtunnel not running. Starting it first..." -ForegroundColor Cyan
+                & $PSCommandPath devtunnel-start
+            }
+
+            $watchdogScript = Join-Path $PSScriptRoot "devtunnel-watchdog.ps1"
+            $wdProc = Start-Process -FilePath "powershell.exe" `
+                -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-File", $watchdogScript, "-Root", $PSScriptRoot `
+                -PassThru
+            $wdProc.Id | Set-Content $wdPidFile
+            Write-Host "Watchdog started (PID: $($wdProc.Id))." -ForegroundColor Green
+            Write-Host "  Log:    $(Join-Path $PSScriptRoot 'devtunnel-watchdog.log')" -ForegroundColor Yellow
+            Write-Host "  Stop:   .\copilotproxy.ps1 devtunnel-watchdog-stop" -ForegroundColor Yellow
+            Write-Host "  Status: .\copilotproxy.ps1 devtunnel-status" -ForegroundColor Yellow
+        }
+        "devtunnel-watchdog-stop" {
+            $wdPidFile = Join-Path $PSScriptRoot "devtunnel-watchdog.pid"
+            if (Test-Path $wdPidFile) {
+                $wdPid = [int](Get-Content $wdPidFile -Raw).Trim()
+                $wdProc = Get-Process -Id $wdPid -ErrorAction SilentlyContinue
+                if ($wdProc -and $wdProc.ProcessName -match 'powershell|pwsh') {
+                    Stop-Process -Id $wdPid -Force
+                    Write-Host "Watchdog stopped (PID: $wdPid)." -ForegroundColor Green
+                } else {
+                    Write-Host "Watchdog process not found (stale PID)." -ForegroundColor Yellow
+                }
+                Remove-Item $wdPidFile -Force -ErrorAction SilentlyContinue
+            } else {
+                Write-Host "No watchdog running." -ForegroundColor Yellow
+            }
         }
         default {
-            Write-Host "copilotproxy - GitHub Copilot API proxy"
             Write-Host ""
             Write-Host "Usage: .\copilotproxy.ps1 [command]"
             Write-Host ""
@@ -354,8 +459,10 @@ try {
             Write-Host "Dev Tunnel (optional - runs locally, tunnels to proxy):"
             Write-Host "  devtunnel-auth           Login + create tunnel (saved to .env)"
             Write-Host "  devtunnel-start          Host tunnel in background"
-            Write-Host "  devtunnel-stop           Stop the tunnel"
-            Write-Host "  devtunnel-status         Show tunnel status + tail logs"
+            Write-Host "  devtunnel-stop           Stop the tunnel (and watchdog)"
+            Write-Host "  devtunnel-status         Show tunnel + watchdog status"
+            Write-Host "  devtunnel-watchdog       Start auto-restart watchdog"
+            Write-Host "  devtunnel-watchdog-stop  Stop the watchdog only"
             Write-Host ""
             Write-Host "Tailscale (optional - runs as sidecar container):"
             Write-Host "  tailscale-auth           Interactive Tailscale login"

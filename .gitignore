@@ -1,3 +1,5 @@
 .env
 devtunnel.log
 devtunnel-err.log
+devtunnel-watchdog.log
+*.pid
